@@ -1,10 +1,10 @@
-# Step 1: Build the Java application using Maven
-FROM maven:3.8.5-openjdk-17 AS build
+# Step 1: Build the Java application using Maven (Java 21)
+FROM maven:3.9.6-eclipse-temurin-21-alpine AS build
 COPY . .
 RUN mvn clean package -DskipTests
 
 # Step 2: Run the Spring Boot Application
-FROM openjdk:17-jdk-slim
+FROM eclipse-temurin:21-jre-alpine
 COPY --from=build /target/*.jar app.jar
 EXPOSE 8080
 ENTRYPOINT ["java","-jar","/app.jar"]
