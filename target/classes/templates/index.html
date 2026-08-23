@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wealth Flow Pro - Real-Time Dashboard</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #151e32;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border-color: #243049;
+            --primary: #6366f1;
+            --input-bg: #0f172a;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
+        }
+
+        [data-theme="light"] {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --primary: #4f46e5;
+            --input-bg: #f1f5f9;
+        }
+
+        * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; padding: 0; transition: background 0.2s, color 0.2s; }
+        body { background: var(--bg-color); color: var(--text-main); padding: 12px; min-height: 100vh; overflow-x: hidden; }
+        .container { max-width: 1150px; margin: auto; display: none; width: 100%; }
+
+        #loginOverlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(11, 15, 25, 0.98); backdrop-filter: blur(10px);
+            display: flex; justify-content: center; align-items: center; z-index: 9999; padding: 15px;
+        }
+        .login-card {
+            background: var(--card-bg); border: 1px solid var(--border-color);
+            padding: 25px 20px; border-radius: 20px; width: 100%; max-width: 380px; text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+        }
+
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+        .brand { display: flex; align-items: center; gap: 10px; }
+        .brand-icon { width: 38px; height: 38px; background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.1rem; flex-shrink: 0; }
+        .header-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+        .live-clock { background: var(--input-bg); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; color: var(--success); display: inline-flex; align-items: center; gap: 6px; }
+        .live-dot { width: 6px; height: 6px; background: var(--success); border-radius: 50%; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }
+        .stat-card { background: var(--card-bg); padding: 12px; border-radius: 14px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 10px; }
+        .stat-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+
+        .tab-bar { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; -webkit-overflow-scrolling: touch; }
+        .tab-bar::-webkit-scrollbar { display: none; }
+        .tab-btn { background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-muted); padding: 6px 12px; border-radius: 16px; font-size: 0.8rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .tab-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        .main-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 16px; }
+        @media (min-width: 850px) { .main-grid { grid-template-columns: 1.4fr 1.1fr; } body { padding: 20px; } }
+
+        .card { background: var(--card-bg); padding: 16px; border-radius: 16px; border: 1px solid var(--border-color); margin-bottom: 16px; width: 100%; }
+        .card-title { font-size: 0.95rem; font-weight: 800; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+
+        .form-row { display: grid; grid-template-columns: 1fr; gap: 8px; margin-bottom: 8px; }
+        @media (min-width: 500px) { .form-row { grid-template-columns: 1fr 1fr; } }
+        input, select { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; outline: none; background: var(--input-bg); color: var(--text-main); font-size: 0.85rem; font-weight: 500; }
+
+        .btn-submit { width: 100%; background: var(--primary); color: white; border: none; padding: 10px; border-radius: 8px; font-size: 0.85rem; font-weight: 700; cursor: pointer; }
+
+        .goals-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 12px; }
+        .goal-item { background: var(--input-bg); padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); }
+        .goal-progress-bar { width: 100%; height: 8px; background: var(--border-color); border-radius: 8px; overflow: hidden; margin-top: 8px; }
+        .goal-progress-fill { height: 100%; border-radius: 8px; transition: width 0.3s; }
+
+        .cal-nav-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .cal-nav-btn { background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); width: 28px; height: 28px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+        .cal-day { padding: 6px 2px; background: var(--input-bg); border-radius: 6px; font-size: 0.75rem; cursor: pointer; border: 1px solid var(--border-color); font-weight: 600; }
+        .cal-day.active-day { background: var(--primary) !important; color: white !important; font-weight: bold; }
+        .cal-header { font-weight: 700; color: var(--text-muted); font-size: 0.7rem; padding-bottom: 2px; }
+
+        .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table { width: 100%; border-collapse: collapse; text-align: left; min-width: 500px; }
+        th, td { padding: 8px 10px; border-bottom: 1px solid var(--border-color); font-size: 0.8rem; white-space: nowrap; }
+        .badge { padding: 2px 6px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; }
+        .badge-Must { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+        .badge-Need { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+        .badge-Want { background: rgba(99, 102, 241, 0.2); color: var(--primary); }
+
+        .btn-cloud { background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 6px 10px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.75rem; }
+        .btn-pdf { background: #10b981; color: white; border: none; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.75rem; }
+        .btn-csv { background: #0284c7; color: white; border: none; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.75rem; }
+    </style>
+</head>
+<body data-theme="dark">
+
+<!-- Login Modal -->
+<div id="loginOverlay">
+    <div class="login-card">
+        <div class="brand-icon" style="margin: 0 auto 12px auto;"><i class="fa-solid fa-user-shield"></i></div>
+        <h3 style="margin-bottom: 4px; font-size: 1.1rem;">Welcome Back</h3>
+        <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 16px;">Sign in to manage your budget</p>
+        
+        <form onsubmit="handleDirectLogin(event)">
+            <input type="text" id="loginUsername" placeholder="Username" style="margin-bottom: 10px;" required />
+            <input type="email" id="loginEmail" placeholder="Email Address" style="margin-bottom: 14px;" required />
+            <button type="submit" class="btn-submit">Login / Sign In</button>
+        </form>
+        
+        <div style="margin: 14px 0; color: var(--text-muted); font-size: 0.75rem;">OR</div>
+        
+        <div id="g_id_onload"
+             data-client_id="772087862441-ontuvdv388cdcnu99u3qjr5lkflvhcja.apps.googleusercontent.com"
+             data-callback="handleCredentialResponse"
+             data-auto_prompt="false">
+        </div>
+        <div class="g_id_signin" 
+             data-type="standard" 
+             data-size="medium" 
+             data-theme="outline" 
+             data-text="sign_in_with" 
+             data-shape="rectangular" 
+             data-logo_alignment="left"
+             style="display: flex; justify-content: center;">
+        </div>
+    </div>
+</div>
+
+<!-- Main App Container -->
+<div class="container" id="mainContainer">
+
+    <div class="header">
+        <div class="brand">
+            <div class="brand-icon"><i class="fa-solid fa-wallet"></i></div>
+            <div>
+                <h3 style="font-size:1.1rem;">Wealth Flow Pro</h3>
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                    <span id="userWelcomeText" style="font-weight:700; color:var(--primary); font-size:0.8rem;">Welcome!</span>
+                    <span class="live-clock"><span class="live-dot"></span><span id="liveClockDisplay">Syncing...</span></span>
+                </div>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn-pdf" onclick="exportCleanPDF()"><i class="fa-solid fa-file-pdf"></i> PDF</button>
+            <button class="btn-csv" onclick="exportCSV()"><i class="fa-solid fa-file-csv"></i> CSV</button>
+            <button class="btn-cloud" onclick="logout()"><i class="fa-solid fa-right-from-bracket"></i></button>
+            <button class="btn-cloud" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i></button>
+        </div>
+    </div>
+
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="filterData('all', this)">All</button>
+        <button class="tab-btn" onclick="filterData('daily', this)">Daily</button>
+        <button class="tab-btn" onclick="filterData('weekly', this)">Weekly</button>
+        <button class="tab-btn" onclick="filterData('monthly', this)">Monthly</button>
+        <button class="tab-btn" onclick="filterData('yearly', this)">Yearly</button>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: rgba(16, 185, 129, 0.15); color: #10b981;"><i class="fa-solid fa-indian-rupee-sign"></i></div>
+            <div style="width: 100%;">
+                <h4 style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">Budget</h4>
+                <input type="number" id="userBudgetInput" placeholder="Budget ₹" style="padding: 2px 4px; font-size: 0.85rem; font-weight: 800;" oninput="updateCalculations()">
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon" style="background: rgba(239, 68, 68, 0.15); color: #ef4444;"><i class="fa-solid fa-money-bill-wave"></i></div>
+            <div>
+                <h4 style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">Spent</h4>
+                <p style="font-size: 0.95rem; font-weight: 800;">₹<span id="totalSpentText" th:text="${totalAmount}">0.00</span></p>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon" style="background: rgba(99, 102, 241, 0.15); color: #6366f1;"><i class="fa-solid fa-vault"></i></div>
+            <div>
+                <h4 style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">Balance</h4>
+                <p style="font-size: 0.95rem; font-weight: 800; color: #10b981;">₹<span id="remainingBalanceText">0.00</span></p>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;"><i class="fa-solid fa-receipt"></i></div>
+            <div>
+                <h4 style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">Count</h4>
+                <p style="font-size: 0.95rem; font-weight: 800;" id="transCount" th:text="${expenseCount}">0</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Financial Goals -->
+    <div class="card">
+        <div class="card-title">
+            <span><i class="fa-solid fa-bullseye" style="color:var(--primary);"></i> Financial Goals</span>
+        </div>
+        <form onsubmit="addGoalRealTime(event)">
+            <div class="form-row">
+                <input type="text" id="goalTitleInput" placeholder="Goal Name (e.g. Bike)" required />
+                <input type="number" id="goalTargetInput" placeholder="Target (₹)" required />
+            </div>
+            <div class="form-row">
+                <input type="number" id="goalSavedInput" placeholder="Saved (₹)" required />
+                <button type="submit" class="btn-submit"><i class="fa-solid fa-plus"></i> Add Goal</button>
+            </div>
+        </form>
+
+        <div class="goals-container" id="goalsListContainer"></div>
+    </div>
+
+    <div class="main-grid">
+        <div class="card">
+            <div class="card-title"><i class="fa-solid fa-bolt" style="color:var(--warning);"></i> Expense Entry</div>
+            <form onsubmit="addExpenseRealTime(event)">
+                <div class="form-row">
+                    <input type="text" id="descInput" placeholder="Description" required />
+                    <input type="number" step="0.01" id="amtInput" placeholder="Amount (₹)" required />
+                </div>
+                <div class="form-row">
+                    <select id="catInput">
+                        <option value="Food">Food 🍔</option>
+                        <option value="Travel">Travel 🚗</option>
+                        <option value="Bills">Bills 💡</option>
+                        <option value="Shopping">Shopping 🛍️</option>
+                    </select>
+                    <select id="natureInput">
+                        <option value="Must">Must</option>
+                        <option value="Need">Need</option>
+                        <option value="Want">Want</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <select id="accInput">
+                        <option value="Bank">Bank Account</option>
+                        <option value="Cash">Cash Wallet</option>
+                        <option value="Credit Card">Credit Card</option>
+                    </select>
+                    <input type="date" id="datePicker" required />
+                </div>
+                <button type="submit" class="btn-submit"><i class="fa-solid fa-plus"></i> Add Entry</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                <span><i class="fa-solid fa-calendar-days"></i> Calendar</span>
+                <button class="btn-cloud" style="padding:2px 6px; font-size:0.7rem;" onclick="resetFilters()">All</button>
+            </div>
+            
+            <div class="cal-nav-header">
+                <button class="cal-nav-btn" onclick="changeMonth(-1)">&lt;</button>
+                <span id="calMonthYearTitle" style="font-weight: 800; font-size: 0.85rem;">Calendar</span>
+                <button class="cal-nav-btn" onclick="changeMonth(1)">&gt;</button>
+            </div>
+
+            <div class="calendar-grid">
+                <div class="cal-header">Su</div>
+                <div class="cal-header">Mo</div>
+                <div class="cal-header">Tu</div>
+                <div class="cal-header">We</div>
+                <div class="cal-header">Th</div>
+                <div class="cal-header">Fr</div>
+                <div class="cal-header">Sa</div>
+            </div>
+            
+            <div class="calendar-grid" id="calendarDaysGrid" style="margin-top: 4px;"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">Spending Analysis</div>
+        <div style="width: 100%; height: 180px; display:flex; justify-content:center;">
+            <canvas id="natureChart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">
+            <span>Logs</span>
+            <button class="btn-cloud" onclick="resetFilters()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+        </div>
+        <div class="table-responsive">
+            <table id="expTable">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Category</th>
+                        <th>Nature</th>
+                        <th>Account</th>
+                        <th>Amount</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="expTableBody">
+                    <tr th:each="exp : ${expenses}" th:id="'row-' + ${exp.id}" th:data-date="${exp.date}">
+                        <td th:text="${exp.createdAt != null ? exp.createdAt : exp.date}">2026-08-23</td>
+                        <td th:text="${exp.description}" style="font-weight:700;">Sample</td>
+                        <td th:text="${exp.category}">Food</td>
+                        <td><span th:class="'badge badge-' + ${exp.spendingNature}" th:text="${exp.spendingNature}">Must</span></td>
+                        <td th:text="${exp.accountType}">Bank</td>
+                        <td style="font-weight:800;">₹<span class="exp-amt" th:text="${exp.amount}">0.00</span></td>
+                        <td><a href="javascript:void(0)" th:onclick="'deleteRealTime(' + ${exp.id} + ')'" style="color:var(--danger);"><i class="fa-solid fa-trash-can"></i></a></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let natureChartInstance = null;
+    let currentCalDate = new Date();
+
+    document.getElementById('datePicker').valueAsDate = new Date();
+
+    window.onload = function() {
+        let loggedIn = localStorage.getItem('loggedIn');
+        let username = localStorage.getItem('username');
+
+        if(loggedIn === 'true' && username) {
+            showDashboard(username);
+        } else {
+            document.getElementById('loginOverlay').style.display = 'flex';
+            document.getElementById('mainContainer').style.display = 'none';
+        }
+
+        let savedBudget = localStorage.getItem('userBudget');
+        if(savedBudget) document.getElementById('userBudgetInput').value = savedBudget;
+
+        startRealTimeClock();
+        renderCalendar();
+        updateCalculations();
+    }
+
+    function showDashboard(username) {
+        document.getElementById('loginOverlay').style.display = 'none';
+        document.getElementById('mainContainer').style.display = 'block';
+        document.getElementById('userWelcomeText').innerText = `Welcome, ${username}!`;
+        loadGoals();
+    }
+
+    async function handleDirectLogin(e) {
+        e.preventDefault();
+        let u = document.getElementById('loginUsername').value.trim();
+        let email = document.getElementById('loginEmail').value.trim();
+
+        if(!u || !email) return;
+
+        localStorage.setItem('loggedIn', 'true');
+        localStorage.setItem('username', u);
+        localStorage.setItem('userEmail', email);
+
+        showDashboard(u);
+    }
+
+    function handleCredentialResponse(response) {
+        const payload = parseJwt(response.credential);
+        let name = payload.name;
+        let email = payload.email;
+
+        localStorage.setItem('loggedIn', 'true');
+        localStorage.setItem('username', name);
+        localStorage.setItem('userEmail', email);
+
+        showDashboard(name);
+    }
+
+    function parseJwt(token) {
+        var base64Url = token.split('.')[1];
+        var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+    }
+
+    function logout() {
+        localStorage.clear();
+        location.reload();
+    }
+
+    function startRealTimeClock() {
+        setInterval(() => {
+            let now = new Date();
+            let timeStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            document.getElementById('liveClockDisplay').innerText = timeStr;
+        }, 1000);
+    }
+
+    async function loadGoals() {
+        try {
+            let res = await fetch('/api/goals/all');
+            let goals = await res.json();
+            let container = document.getElementById('goalsListContainer');
+            container.innerHTML = '';
+            goals.forEach(g => appendGoalCard(g));
+        } catch(e) { console.error(e); }
+    }
+
+    async function addGoalRealTime(e) {
+        e.preventDefault();
+        let name = document.getElementById('goalTitleInput').value.trim();
+        let target = parseFloat(document.getElementById('goalTargetInput').value);
+        let saved = parseFloat(document.getElementById('goalSavedInput').value);
+
+        if(!name) return;
+
+        try {
+            let res = await fetch('/api/goals/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, targetAmount: target, savedAmount: saved })
+            });
+
+            if(res.ok) {
+                loadGoals();
+                document.getElementById('goalTitleInput').value = '';
+                document.getElementById('goalTargetInput').value = '';
+                document.getElementById('goalSavedInput').value = '';
+            }
+        } catch(err) { console.error(err); }
+    }
+
+    function appendGoalCard(g) {
+        let container = document.getElementById('goalsListContainer');
+        let percentage = Math.min(100, ((g.savedAmount / g.targetAmount) * 100)).toFixed(1);
+        let isAchieved = g.savedAmount >= g.targetAmount;
+
+        let statusBadge = isAchieved 
+            ? `<span style="background:#10b981; color:white; padding:2px 8px; border-radius:10px; font-size:0.65rem; font-weight:800;">Target Reached 🎉</span>`
+            : `<span style="background:var(--primary); color:white; padding:2px 8px; border-radius:10px; font-size:0.65rem;">${percentage}%</span>`;
+
+        let barColor = isAchieved ? '#10b981' : 'linear-gradient(90deg, #6366f1, #10b981)';
+
+        let div = document.createElement('div');
+        div.className = 'goal-item';
+        div.id = 'goal-' + g.id;
+
+        div.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h4 style="font-size:0.85rem; font-weight:800; color:var(--text-main);">${g.name}</h4>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    ${statusBadge}
+                    <a href="javascript:void(0)" onclick="deleteGoal(${g.id})" style="color:var(--danger); font-size:0.8rem;"><i class="fa-solid fa-trash"></i></a>
+                </div>
+            </div>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:6px;">
+                Saved: <b style="color:${isAchieved ? '#10b981' : 'var(--text-main)'};">₹${g.savedAmount}</b> / ₹${g.targetAmount}
+            </div>
+            <div class="goal-progress-bar">
+                <div class="goal-progress-fill" style="width: ${percentage}%; background: ${barColor};"></div>
+            </div>
+        `;
+        container.prepend(div);
+    }
+
+    async function deleteGoal(id) {
+        if(!confirm("Delete goal?")) return;
+        try {
+            let res = await fetch('/api/goals/delete/' + id, { method: 'DELETE' });
+            if(res.ok) {
+                let elem = document.getElementById('goal-' + id);
+                if(elem) elem.remove();
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    function renderCalendar() {
+        let m = currentCalDate.getMonth();
+        let y = currentCalDate.getFullYear();
+        let monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        
+        document.getElementById('calMonthYearTitle').innerText = `${monthNames[m]} ${y}`;
+        let daysGrid = document.getElementById('calendarDaysGrid');
+        daysGrid.innerHTML = '';
+
+        let firstDay = new Date(y, m, 1).getDay();
+        let totalDays = new Date(y, m + 1, 0).getDate();
+        let today = new Date();
+        let isCurrentMonth = today.getMonth() === m && today.getFullYear() === y;
+
+        for(let i = 0; i < firstDay; i++) { daysGrid.appendChild(document.createElement('div')); }
+
+        for(let day = 1; day <= totalDays; day++) {
+            let dayDiv = document.createElement('div');
+            dayDiv.className = 'cal-day';
+            dayDiv.innerText = day;
+            
+            let monthStr = (m + 1 < 10) ? '0' + (m + 1) : (m + 1);
+            let dayStr = (day < 10) ? '0' + day : day;
+            let fullDateStr = `${y}-${monthStr}-${dayStr}`;
+
+            if (isCurrentMonth && day === today.getDate()) dayDiv.classList.add('active-day');
+
+            dayDiv.onclick = function() {
+                document.querySelectorAll('.cal-day').forEach(d => d.classList.remove('active-day'));
+                dayDiv.classList.add('active-day');
+                filterByDate(fullDateStr);
+            };
+
+            daysGrid.appendChild(dayDiv);
+        }
+    }
+
+    async function addExpenseRealTime(e) {
+        e.preventDefault();
+
+        let now = new Date();
+        let formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        let fullDateStamp = document.getElementById('datePicker').value + ' ' + formattedTime;
+
+        let payload = {
+            description: document.getElementById('descInput').value,
+            amount: parseFloat(document.getElementById('amtInput').value),
+            category: document.getElementById('catInput').value,
+            spendingNature: document.getElementById('natureInput').value,
+            accountType: document.getElementById('accInput').value,
+            date: document.getElementById('datePicker').value,
+            createdAt: fullDateStamp
+        };
+
+        try {
+            let res = await fetch('/api/expenses/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if(res.ok) {
+                let saved = await res.json();
+                appendRowToTable(saved);
+                updateCalculations();
+                document.getElementById('descInput').value = '';
+                document.getElementById('amtInput').value = '';
+            }
+        } catch(err) { console.error(err); }
+    }
+
+    function appendRowToTable(item) {
+        let tbody = document.getElementById('expTableBody');
+        let tr = document.createElement('tr');
+        tr.id = 'row-' + item.id;
+        tr.setAttribute('data-date', item.date);
+
+        tr.innerHTML = `
+            <td>${item.createdAt || item.date}</td>
+            <td style="font-weight:700;">${item.description}</td>
+            <td>${item.category}</td>
+            <td><span class="badge badge-${item.spendingNature}">${item.spendingNature}</span></td>
+            <td>${item.accountType}</td>
+            <td style="font-weight:800;">₹<span class="exp-amt">${item.amount.toFixed(2)}</span></td>
+            <td><a href="javascript:void(0)" onclick="deleteRealTime(${item.id})" style="color:var(--danger);"><i class="fa-solid fa-trash-can"></i></a></td>
+        `;
+
+        tbody.prepend(tr);
+    }
+
+    async function deleteRealTime(id) {
+        if(!confirm("Delete transaction?")) return;
+        try {
+            let res = await fetch('/api/expenses/delete/' + id, { method: 'DELETE' });
+            if(res.ok) {
+                let row = document.getElementById('row-' + id);
+                if(row) row.remove();
+                updateCalculations();
+            }
+        } catch(err) { console.error(err); }
+    }
+
+    function toggleTheme() {
+        let b = document.body;
+        b.setAttribute('data-theme', b.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    }
+
+    function filterData(type, btn) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        if(btn) btn.classList.add('active');
+
+        let rows = document.querySelectorAll("#expTable tbody tr");
+        let todayStr = new Date().toISOString().split('T')[0];
+
+        rows.forEach(r => {
+            let rowDate = r.getAttribute('data-date');
+            if (type === 'all') r.style.display = '';
+            else if (type === 'daily') r.style.display = (rowDate === todayStr) ? '' : 'none';
+            else r.style.display = '';
+        });
+        updateCalculations();
+    }
+
+    function changeMonth(offset) {
+        currentCalDate.setMonth(currentCalDate.getMonth() + offset);
+        renderCalendar();
+    }
+
+    function filterByDate(selectedDate) {
+        let rows = document.querySelectorAll("#expTable tbody tr");
+        rows.forEach(r => {
+            let rowDate = r.getAttribute('data-date');
+            r.style.display = (rowDate === selectedDate) ? '' : 'none';
+        });
+        updateCalculations();
+    }
+
+    function resetFilters() {
+        renderCalendar();
+        let rows = document.querySelectorAll("#expTable tbody tr");
+        rows.forEach(r => r.style.display = '');
+        updateCalculations();
+    }
+
+    function updateCalculations() {
+        let total = 0, count = 0;
+        let mustCount = 0, needCount = 0, wantCount = 0;
+
+        document.querySelectorAll("#expTable tbody tr").forEach(r => {
+            if (r.style.display !== 'none') {
+                let amtText = r.querySelector('.exp-amt').innerText;
+                total += parseFloat(amtText) || 0;
+                count++;
+
+                let badge = r.querySelector('.badge');
+                if(badge) {
+                    let txt = badge.innerText.trim();
+                    if(txt === 'Want') wantCount++;
+                    else if(txt === 'Need') needCount++;
+                    else mustCount++;
+                }
+            }
+        });
+
+        document.getElementById('totalSpentText').innerText = total.toFixed(2);
+        document.getElementById('transCount').innerText = count;
+
+        let userBudget = parseFloat(document.getElementById('userBudgetInput').value) || 0;
+        localStorage.setItem('userBudget', userBudget);
+
+        let remaining = userBudget - total;
+        let remElem = document.getElementById('remainingBalanceText');
+        remElem.innerText = remaining.toFixed(2);
+        remElem.style.color = (remaining < 0) ? '#ef4444' : '#10b981';
+
+        updateChart(mustCount, needCount, wantCount);
+    }
+
+    function updateChart(must, need, want) {
+        const ctx = document.getElementById('natureChart').getContext('2d');
+        if(natureChartInstance) natureChartInstance.destroy();
+
+        natureChartInstance = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: ['Must', 'Need', 'Want'],
+                datasets: [{
+                    data: [must, need, want],
+                    backgroundColor: ['#ef4444', '#f59e0b', '#6366f1']
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+        });
+    }
+
+    function exportCleanPDF() {
+        let user = localStorage.getItem('username') || 'User';
+        let budget = document.getElementById('userBudgetInput').value || '0.00';
+        let totalSpent = document.getElementById('totalSpentText').innerText;
+        let balance = document.getElementById('remainingBalanceText').innerText;
+
+        let tableRowsHTML = '';
+        document.querySelectorAll("#expTable tbody tr").forEach(r => {
+            if (r.style.display !== 'none') {
+                let cols = r.querySelectorAll('td');
+                tableRowsHTML += `
+                    <tr>
+                        <td style="padding:6px; border-bottom:1px solid #ddd;">${cols[0].innerText}</td>
+                        <td style="padding:6px; border-bottom:1px solid #ddd; font-weight:bold;">${cols[1].innerText}</td>
+                        <td style="padding:6px; border-bottom:1px solid #ddd;">${cols[2].innerText}</td>
+                        <td style="padding:6px; border-bottom:1px solid #ddd;">${cols[3].innerText}</td>
+                        <td style="padding:6px; border-bottom:1px solid #ddd;">${cols[4].innerText}</td>
+                        <td style="padding:6px; border-bottom:1px solid #ddd; text-align:right; font-weight:bold;">${cols[5].innerText}</td>
+                    </tr>
+                `;
+            }
+        });
+
+        let pdfContainer = document.createElement('div');
+        pdfContainer.style.padding = '15px';
+        pdfContainer.style.fontFamily = 'Arial, sans-serif';
+
+        pdfContainer.innerHTML = `
+            <div style="border-bottom: 2px solid #6366f1; padding-bottom: 8px; margin-bottom: 12px;">
+                <h3 style="color:#6366f1; margin:0;">Wealth Flow Pro - Statement</h3>
+                <p style="margin:2px 0 0 0; color:#555; font-size:12px;">User: <b>${user}</b></p>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:12px; background:#f8fafc; padding:8px; border-radius:6px; font-size:12px;">
+                <div><b>Budget:</b> ₹${budget}</div>
+                <div><b>Spent:</b> ₹${totalSpent}</div>
+                <div><b>Balance:</b> ₹${balance}</div>
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                <thead>
+                    <tr style="background:#6366f1; color:white;">
+                        <th style="padding:6px; text-align:left;">Date</th>
+                        <th style="padding:6px; text-align:left;">Description</th>
+                        <th style="padding:6px; text-align:left;">Category</th>
+                        <th style="padding:6px; text-align:left;">Nature</th>
+                        <th style="padding:6px; text-align:left;">Account</th>
+                        <th style="padding:6px; text-align:right;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>${tableRowsHTML}</tbody>
+            </table>
+        `;
+
+        html2pdf().set({ margin: 0.3, filename: `${user}_Statement.pdf` }).from(pdfContainer).save();
+    }
+
+    function exportCSV() {
+        let csv = ['Date,Description,Category,Nature,Account,Amount'];
+        document.querySelectorAll("#expTable tbody tr").forEach(r => {
+            if (r.style.display !== 'none') {
+                let cols = r.querySelectorAll('td');
+                csv.push([
+                    `"${cols[0].innerText}"`,
+                    `"${cols[1].innerText}"`,
+                    `"${cols[2].innerText}"`,
+                    `"${cols[3].innerText}"`,
+                    `"${cols[4].innerText}"`,
+                    `"${cols[5].innerText.replace('₹','')}"`
+                ].join(','));
+            }
+        });
+
+        let csvFile = new Blob([csv.join('\n')], { type: 'text/csv' });
+        let downloadLink = document.createElement('a');
+        downloadLink.download = 'Statement.csv';
+        downloadLink.href = window.URL.createObjectURL(csvFile);
+        downloadLink.click();
+    }
+</script>
+
+</body>
+</html>
